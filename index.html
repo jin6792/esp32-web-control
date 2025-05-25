@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 控制面板</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            color: white;
+            text-align: center;
+            padding: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .connection-status {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+            border-left: 4px solid #dc3545;
+        }
+
+        .connection-status.connected {
+            border-left-color: #28a745;
+        }
+
+        .control-section {
+            margin-bottom: 30px;
+        }
+
+        .control-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .control-group {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+
+        .led-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .led-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .led-label {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #4ecdc4;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .ip-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #4ecdc4, #44a08d);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .sensor-data {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .sensor-item {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .sensor-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #4ecdc4;
+            margin-bottom: 5px;
+        }
+
+        .sensor-label {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 600px) {
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 ESP32 控制面板</h1>
+            <p>簡單易用的物聯網控制介面</p>
+        </div>
+        
+        <div class="content">
+            <!-- 連線狀態 -->
+            <div class="connection-status" id="connectionStatus">
+                <strong>狀態：</strong><span id="statusText">未連線</span>
+            </div>
+
+            <!-- 連線設定 -->
+            <div class="control-section">
+                <h3>📡 連線設定</h3>
+                <div class="control-group">
+                    <input type="text" class="ip-input" id="espIP" placeholder="請輸入ESP32的IP地址 (例: 192.168.1.100)" value="">
+                    <button class="btn" onclick="connectESP()">連接 ESP32</button>
+                </div>
+            </div>
+
+            <!-- LED控制 -->
+            <div class="control-section">
+                <h3>💡 LED 控制</h3>
+                <div class="control-group">
+                    <div class="led-controls">
+                        <div class="led-item">
+                            <span class="led-label">內建 LED</span>
+                            <label class="switch">
+                                <input type="checkbox" id="ledBuiltin" onchange="controlLED('builtin', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="led-item">
+                            <span class="led-label">外部 LED (GPIO 4)</span>
+                            <label class="switch">
+                                <input type="checkbox" id="ledGPIO2" onchange="controlLED('gpio2', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 感測器資料 -->
+            <div class="control-section">
+                <h3>📊 感測器資料</h3>
+                <div class="control-group">
+                    <div class="sensor-data">
+                        <div class="sensor-item">
+                            <div class="sensor-value" id="temperature">--</div>
+                            <div class="sensor-label">溫度 (°C)</div>
+                        </div>
+                        <div class="sensor-item">
+                            <div class="sensor-value" id="humidity">--</div>
+                            <div class="sensor-label">濕度 (%)</div>
+                        </div>
+                        <div class="sensor-item">
+                            <div class="sensor-value" id="freeHeap">--</div>
+                            <div class="sensor-label">可用記憶體 (KB)</div>
+                        </div>
+                    </div>
+                    <button class="btn" onclick="getSensorData()" style="margin-top: 15px;">🔄 更新資料</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let espIPAddress = '';
+        let isConnected = false;
+
+        // 連接ESP32
+        async function connectESP() {
+            const ipInput = document.getElementById('espIP');
+            espIPAddress = ipInput.value.trim();
+            
+            if (!espIPAddress) {
+                alert('請輸入ESP32的IP地址');
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://${espIPAddress}/status`);
+                if (response.ok) {
+                    isConnected = true;
+                    updateConnectionStatus(true);
+                    getSensorData(); // 連接成功後立即獲取資料
+                } else {
+                    throw new Error('連接失敗');
+                }
+            } catch (error) {
+                isConnected = false;
+                updateConnectionStatus(false);
+                alert('連接失敗，請檢查IP地址和ESP32狀態');
+            }
+        }
+
+        // 更新連接狀態顯示
+        function updateConnectionStatus(connected) {
+            const statusDiv = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('statusText');
+            
+            if (connected) {
+                statusDiv.classList.add('connected');
+                statusText.textContent = `已連接 (${espIPAddress})`;
+            } else {
+                statusDiv.classList.remove('connected');
+                statusText.textContent = '未連線';
+            }
+        }
+
+        // 控制LED
+        async function controlLED(ledType, state) {
+            if (!isConnected) {
+                alert('請先連接ESP32');
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://${espIPAddress}/led/${ledType}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ state: state })
+                });
+
+                if (!response.ok) {
+                    throw new Error('LED控制失敗');
+                }
+
+                console.log(`LED ${ledType} ${state ? '開啟' : '關閉'} 成功`);
+            } catch (error) {
+                alert('LED控制失敗，請檢查連接');
+                console.error('Error:', error);
+                // 復原開關狀態
+                const checkbox = document.getElementById(ledType === 'builtin' ? 'ledBuiltin' : 'ledGPIO2');
+                checkbox.checked = !state;
+            }
+        }
+
+        // 獲取感測器資料
+        async function getSensorData() {
+            if (!isConnected) {
+                alert('請先連接ESP32');
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://${espIPAddress}/sensors`);
+                const data = await response.json();
+
+                document.getElementById('temperature').textContent = data.temperature || '--';
+                document.getElementById('humidity').textContent = data.humidity || '--';
+                document.getElementById('freeHeap').textContent = Math.round(data.freeHeap / 1024) || '--';
+            } catch (error) {
+                console.error('獲取感測器資料失敗:', error);
+                document.getElementById('temperature').textContent = '--';
+                document.getElementById('humidity').textContent = '--';
+                document.getElementById('freeHeap').textContent = '--';
+            }
+        }
+
+        // 頁面載入時的初始化
+        window.addEventListener('load', function() {
+            console.log('ESP32控制面板已載入');
+        });
+
+        // 定期更新感測器資料 (每10秒)
+        setInterval(() => {
+            if (isConnected) {
+                getSensorData();
+            }
+        }, 10000);
+    </script>
+</body>
+</html>
